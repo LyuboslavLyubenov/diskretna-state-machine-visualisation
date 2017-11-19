@@ -4,18 +4,50 @@
 
 <script type="text/javascript" src="q.js"></script>
 <script type="text/javascript" src="fabric.min.js"></script>
+<style>
+	h1 {
+		width: 80%;
+		padding-left: 10%;
+		padding-right: 10%;
+		text-align:center;
+	}
 
+	canvas {
+		display: block;
+		position: relative;
+		left: 50%;
+		margin-left: -350px;
+	}
+	
+	div {
+		display: block;
+		position: relative;
+		width: 700px;
+		left: 50%;
+		margin-left: -350px;
+	}
+	
+	div > input {
+		margin-left: 10px;
+	}
+	
+	label {
+		margin-left: 90px;
+	}
+</style>
 </head>
 
 <body>
-
-	<label>
-	</label>
-	<input id="number" type="number" value=""/>
-	<input type="button" onclick="startSimulation()" value="Simulate" />
+	<h1>Визуално представяне как работи автомат разпознаващ бинарни числа делящи се на 3 без остатък</h1>
 	<canvas id='c'>
 	</canvas>
-
+	<div>
+		<label for="number">
+		Въведи бинарно число (пример 1001)
+		</label>
+		<input id="number" type="number" value=""/>
+		<input type="button" onclick="startSimulation()" value="Simulate" />
+	</div>
 	<!-- покажи автомат, 2ични числа който се делят на 3 без остатък  -->
 	<script type="text/javascript">
 		String.prototype.replaceAll = function(search, replacement) {
@@ -24,7 +56,7 @@
 		};	
 		
 		function configureCanvas(canvas) {
-			setCanvasSize(1000, 300, canvas);
+			setCanvasSize(700, 300, canvas);
 		}
 		
 		function setCanvasSize(width, height, canvas) {
