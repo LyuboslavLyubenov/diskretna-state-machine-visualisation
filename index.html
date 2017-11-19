@@ -1,0 +1,335 @@
+<html>
+
+<head>
+
+<script type="text/javascript" src="q.js"></script>
+<script type="text/javascript" src="fabric.min.js"></script>
+
+</head>
+
+<body>
+
+	<label>
+	</label>
+	<input id="number" type="number" value=""/>
+	<input type="button" onclick="startSimulation()" value="Simulate" />
+	<canvas id='c'>
+	</canvas>
+
+	<!-- покажи автомат, 2ични числа който се делят на 3 без остатък  -->
+	<script type="text/javascript">
+		String.prototype.replaceAll = function(search, replacement) {
+			var target = this;
+			return target.split(search).join(replacement);
+		};	
+		
+		function configureCanvas(canvas) {
+			setCanvasSize(1000, 300, canvas);
+		}
+		
+		function setCanvasSize(width, height, canvas) {
+			canvas.setWidth(width);
+			canvas.setHeight(height);
+			canvas.calcOffset();
+		}
+		
+		var globalStateId = 1;
+		
+		function State(stateNumber, position, canvas) {
+
+			var statePosition = {x: 0, y: 0};
+			var enlargedCircleSize = 37;
+			var defaultCircleSize = 30;
+			var defaultFontSize = 24;
+			var defaultAnimationDuration = 250;
+			var pauseBetweenAnimations = 1000;			//in ms
+			
+			this.setPosition = function (x, y) {
+					statePosition.x = x;
+					statePosition.y = y;
+						
+					this.circle.left = statePosition.x;
+					this.circle.top = statePosition.y;
+					
+					this.stateNumberText.left = statePosition.x + this.circle.radius - (this.stateNumberText.width / 2);
+					this.stateNumberText.top = statePosition.y + this.circle.radius - (this.stateNumberText.height / 2);
+				}
+				
+			this.getPosition = function() { return statePosition; }
+			
+			this.playStateSelectedAnimation = function (onComplete) {
+					var _this = this;
+					this.playEnlargementAnimation(function () { 
+						setTimeout( 
+							function () { 
+								_this.playShrinkingAnimation(onComplete, _this) 
+							}, 
+							pauseBetweenAnimations);
+						});
+				}
+			
+			this.playEnlargementAnimation = function (onComplete) {
+					this.playAnimation(enlargedCircleSize, onComplete);
+				}
+				
+			this.playShrinkingAnimation = function (onComplete) {
+					this.playAnimation(defaultCircleSize, onComplete);
+				}
+			
+			this.playAnimation = function (desiredCircleSize, onComplete) { 
+					var _canvas = this.canvas;
+					var _this = this;
+					
+					this.circle.animate('radius', desiredCircleSize, {
+							onChange: function () { 
+								var oldPosition = _this.getPosition(); 
+								_this.setPosition(oldPosition.x, oldPosition.y); 
+								_canvas.renderAll(); 
+							},
+							duration: defaultAnimationDuration,
+							onComplete: onComplete,
+							easing: fabric.util.ease.easeInBack
+						});
+				};
+			
+			if (position && position.x && position.y) {
+				statePosition.x = position.x;
+				statePosition.y = position.y;
+			}
+			
+			this.canvas = canvas;
+			
+			this.circle = new fabric.Circle({radius: defaultCircleSize, stroke: 'black', strokeWidth: 2});
+			this.stateNumberText = new fabric.Text(stateNumber + '', {fill: 'white', fontSize: defaultFontSize});
+			
+			this.id = ++globalStateId;
+			
+			this.setPosition(statePosition.x, statePosition.y);
+		}
+		
+		function addStateToCanvas(state, canvas) {
+			canvas.add(state.circle);
+			canvas.add(state.stateNumberText);
+		}
+
+		function bringStateToFront(state, canvas) {
+			canvas.bringToFront(state.circle);
+			canvas.bringToFront(state.stateNumberText);
+		}
+			
+		function StateMachine(states, transitions) {
+			var _this = this;
+			var transitionFontSize = 22;		
+			var _states = states;
+			var _transitions = transitions;
+			var transitionsDrawings = [];
+			
+			function getState(stateId) {
+				var result = _states.filter(function (state) {
+					return state.id === stateId;
+				});
+				
+				if (result.length > 0) {
+					return result[0];
+				}
+				
+				return null;
+			}
+			
+			for (var i = 0; i < _transitions.length; i++) {
+				var transition = _transitions[i];
+				var fromState = getState(transition['fromStateId']);
+				var toState = getState(transition['toStateId']);
+				
+				var fromStatePosition = fromState.getPosition();
+				var toStatePosition = toState.getPosition();
+				
+				var transitionDrawing = {'transition' : transition};
+				
+				if (fromState.id === toState.id) {
+					var path = 'M{0},{1} C{2},{3} {4},{5} {0},{1} Z';
+					var curveX = fromStatePosition.x + fromState.circle.radius;
+					var curveY = fromStatePosition.y + fromState.circle.radius;
+					
+					path = path.replaceAll('{0}', curveX)
+						.replaceAll('{1}', curveY)
+						.replaceAll('{2}', curveX - 100)
+						.replaceAll('{3}', curveY - 100)
+						.replaceAll('{4}', curveX + 100)
+						.replaceAll('{5}', curveY - 100);
+					
+					var curve = new fabric.Path(path);
+					curve.set({'stroke': 'black', 'fill': null});	
+					
+					var text = new fabric.Text(transition.key, {'fill': 'black', 'fontSize': transitionFontSize});
+					
+					text.left = curveX - text.width / 2;
+					text.top = curveY - (100 + text.height / 2);					
+				
+					canvas.add(text);
+					canvas.add(curve);
+					
+					transitionDrawing.drawing = curve;
+					transitionDrawing.text = text;
+				} else {
+				
+					var x1 = fromStatePosition.x + fromState.circle.radius;
+					var y1 = fromStatePosition.y + fromState.circle.radius;
+					var x2 = toStatePosition.x + toState.circle.radius;
+					var y2 = toStatePosition.y + toState.circle.radius;
+					
+					var lineCordinates = [x1, y1, x2, y2];
+					var line = new fabric.Line(lineCordinates, {'fill': 'black', 'stroke': 'black', 'strokeWidth': 1});
+					
+					var text = new fabric.Text(transition.key, {'fill': 'black', 'fontSize': transitionFontSize});
+					var textLeft = toStatePosition.x + ((x1 - x2) / 2) + text.width;
+					var textTop = fromStatePosition.y + fromState.circle.radius / 2;
+					
+					var transitionDrawingsLines = 
+						transitionsDrawings.filter(function (el) { 
+														return el.drawing.x1 && 
+															el.drawing.y1 && 
+															el.drawing.x2 && 
+															el.drawing.y2 && 
+															el.drawing.x1 === x2 && 
+															el.drawing.y1 === y2 && 
+															el.drawing.x2 === x1 && 
+															el.drawing.y2 === y1}).length;
+						
+					if (transitionDrawingsLines > 0) { 
+						textTop += line.height + text.height + 10 + (10 * transitionDrawingsLines);
+					} else {
+						textTop -= line.height + text.height;
+					}					
+					
+					line.top += transitionDrawingsLines * 10;
+					
+					text.left = textLeft;
+					text.top = textTop;
+					
+					canvas.add(text);
+					canvas.add(line);
+					
+					transitionDrawing.drawing = line;
+					transitionDrawing.text = text;
+				}
+				
+				transitionsDrawings.push(transitionDrawing);
+				
+				bringStateToFront(fromState, canvas);
+				bringStateToFront(toState, canvas);
+			}
+			
+			function canTransition(fromStateId, key) {
+				return getTransitions(fromStateId, key).length > 0;
+			}
+			
+			function getTransitions(fromStateId, key) {
+				return _transitions.filter(function (el) { return el.fromStateId === fromStateId && el.key === key });
+			}
+			
+			var defaultTransitionDuration = 2000;
+			var defaultWaitTimeBetweenTransitions = 200;
+			
+			function makeTransitionToWith(fromStateId, key) {
+				var deferred = Q.defer();
+				var legalTransitions = getTransitions(fromStateId, key);
+				
+				if (legalTransitions.length !== 1) {
+					deferred.reject(fromStateId);
+					return deferred.promise; 
+				} 
+				
+				var currentTransition = legalTransitions[0];
+				var transitionDrawing = transitionsDrawings.filter(function (el) {return el.transition === currentTransition})[0];
+				
+				transitionDrawing.drawing.stroke = 'orange';
+				transitionDrawing.text.fill = 'orange';
+				transitionDrawing.drawing.dirty = true;
+				transitionDrawing.text.dirty = true;
+				
+				canvas.renderAll();
+				
+				setTimeout(function () { 
+					transitionDrawing.drawing.stroke = 'black';
+					transitionDrawing.text.fill = 'black';
+					transitionDrawing.drawing.dirty = true;
+					transitionDrawing.text.dirty = true;
+					
+					var fromState = getState(currentTransition.fromStateId);
+					fromState.circle.stroke = 'black';
+					fromState.circle.dirty = true;
+					
+					var toState = getState(currentTransition.toStateId);
+					toState.circle.stroke = 'orange';
+					toState.circle.dirty = true;
+					
+					canvas.renderAll();
+					
+					setTimeout(function () {deferred.resolve(toState.id)}, defaultWaitTimeBetweenTransitions);
+				}, defaultTransitionDuration);
+				
+				return deferred.promise;
+			}
+			
+			//on completed returns true if word the word is recognizable
+			this.detect = function (numberLeftOver, onCompleted, currentStateId) {
+				var remainingDigitsToCheck = numberLeftOver + '';
+				var digit = remainingDigitsToCheck[0];
+				
+				makeTransitionToWith(currentStateId, digit).then(function (newCurrentStateId) {
+					_this.detect(remainingDigitsToCheck.substring(1), onCompleted, newCurrentStateId);
+				}, function (error) { 
+					var fromStateId = error;
+					onCompleted(fromStateId === _states[0].id);
+				}).done();
+			}
+		}
+		
+		var canvas = new fabric.StaticCanvas('c');		
+		configureCanvas(canvas);
+		
+		var firstState = new State('S1', {x: 100, y: 100}, canvas);
+		var secondState = new State('S2', {x: 300, y: 100}, canvas);
+		var thirdState = new State('S3', {x: 500, y: 100}, canvas);
+		
+		addStateToCanvas(firstState, canvas);
+        addStateToCanvas(secondState, canvas);
+		addStateToCanvas(thirdState, canvas);
+	
+		var states = [firstState, secondState, thirdState];
+		var transitions = [];
+		
+		transitions.push({'fromStateId': firstState.id, 'toStateId': firstState.id, 'key': '0'});
+		transitions.push({'fromStateId': firstState.id, 'toStateId': secondState.id, 'key': '1'});
+		transitions.push({'fromStateId': secondState.id, 'toStateId': thirdState.id, 'key': '0'});
+		transitions.push({'fromStateId': thirdState.id, 'toStateId': thirdState.id, 'key': '1'});
+		transitions.push({'fromStateId': thirdState.id, 'toStateId': secondState.id, 'key': '0'});
+		transitions.push({'fromStateId': secondState.id, 'toStateId': firstState.id, 'key': '1'});
+		
+		var stateMachine = new StateMachine(states, transitions);
+		
+		function startSimulation() {
+		console.log('deeba');
+		
+			setTimeout(
+				function () {
+					stateMachine.detect(
+						document.getElementById('number').value + '', 
+						function (result) {
+							if (result) {
+								alert('Автомата разпознава думата');
+							} else {
+								alert('Автомата не разпознава думата');
+							}
+							
+							location.reload();
+						}, 
+						states[0].id);
+				}, 1000); 
+		}
+	</script>
+
+</body>
+
+</html>
